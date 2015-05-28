@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 from __future__ import unicode_literals
-from __future__ import absolute_import
+# from __future__ import absolute_import
 
 import calendar
 from collections import Mapping
@@ -12,6 +12,7 @@ import json
 import os
 import re
 import time
+import sys
 
 import messageparams
 from loghandler import LogHandler

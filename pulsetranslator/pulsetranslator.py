@@ -1,6 +1,9 @@
+# encoding: utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import unicode_literals
+from __future__ import absolute_import
 
 import calendar
 from collections import Mapping
@@ -8,13 +11,13 @@ import copy
 import json
 import os
 import re
-import socket
 import time
 
 import messageparams
+from loghandler import LogHandler
 from pyLibrary.debugs.logs import Log
 from pyLibrary.dot import Dict, wrap
-from pyLibrary.env.pulse import Pulse
+from pyLibrary.env.pulse import Consumer
 from pyLibrary.meta import use_settings
 from pyLibrary.thread.threads import Thread
 from pyLibrary.times.dates import Date
@@ -32,13 +35,11 @@ class PulseBuildbotTranslator(object):
         no_output=False,
         consumer_cfg=None,
         publisher_cfg=None,
-        applabel=None,
         settings=None
     ):
         self.settings = settings
-        self.loghandler = self.settings.destination
-        self.settings.label = 'pulse-build-translator-%s' % (applabel or
-                                                    socket.gethostname())
+        # from pulsetranslator.loghandler import LogHandler
+        self.loghandler = LogHandler(self.settings.destination)
 
     def start(self):
         if self.settings.message:
@@ -48,7 +49,7 @@ class PulseBuildbotTranslator(object):
             self.on_pulse_message(data)
             return
 
-        with Pulse(target=self.on_pulse_message, settings=self.settings.source):
+        with Consumer(target=self.on_pulse_message, settings=self.settings.source):
             Thread.wait_for_shutdown_signal()
 
     def process_unittest(self, data):

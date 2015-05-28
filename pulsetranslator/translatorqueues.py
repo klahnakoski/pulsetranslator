@@ -1,16 +1,26 @@
+# encoding: utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from collections import Mapping
 
 import datetime
 import time
 
 from mozillapulse.messages.base import GenericMessage
+from pyLibrary.env import pulse
 from pyLibrary.parsers import Log
 
 
-def publish_message(publisherClass, data, routing_key, pulse_cfg):
-    assert(isinstance(data, dict))
+publisher = None
+
+
+def publish_message(_, data, routing_key, pulse_cfg):
+    global publisher
+    assert(isinstance(data, Mapping))
 
     msg = GenericMessage()
     msg.routing_parts = routing_key.split('.')
@@ -20,10 +30,10 @@ def publish_message(publisherClass, data, routing_key, pulse_cfg):
     failures = []
     while True:
         try:
-            publisher = publisherClass(connect=False)
-            if pulse_cfg:
-                publisher.config = pulse_cfg
-            publisher.publish(msg)
+            if not publisher:
+                publisher = pulse.Publisher(settings=pulse_cfg)
+
+            publisher.send(routing_key, msg)
             break
         except Exception, e:
             now = datetime.datetime.now()

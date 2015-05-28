@@ -12,11 +12,14 @@
 		"debug": false
 	},
 	"destination":{
-		"exchange": "exchange/build/normalized",
+		"exchange": "exchange/ekyle-aws-1/normalized",
 		"durable": true,
 		"queue": "pulse_logger_raw_dev",
-		"$ref": "file://~/private.json#pulse_user",
-		"debug": false
+		"host":"pulse.mozilla.org",
+		"port":  5671,
+		"serializer":"json",
+        "broker_timezone":"GMT",
+		"$ref": "file://~/private.json#pulse_user"
 	},
 	"debug":{
 		"log":[

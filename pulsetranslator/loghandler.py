@@ -1,18 +1,18 @@
+# encoding: utf-8
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+from __future__ import unicode_literals
+from __future__ import absolute_import
 
 import calendar
-import httplib
 import time
-from urlparse import urlparse
 
 from mozillapulse.publishers import NormalizedBuildPublisher
 import requests
 
-from pyLibrary.debugs.logs import Log
-from pyLibrary.dot import wrap
 from translatorqueues import publish_message
+from pyLibrary.debugs.logs import Log
 
 
 DEBUG = False
@@ -30,10 +30,10 @@ class LogHandler(object):
 
         try:
             res = requests.head(url)
-            code = res.status
+            code = res.status_code
 
             if code == 200:
-                content_length = wrap(res.headers)["content-length"]
+                content_length = int(res.headers["content-length"])
             else:
                 content_length = -1
 

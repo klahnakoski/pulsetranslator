@@ -1,0 +1,28 @@
+{
+	"daemon":false, //run as daemon (posix only)')
+	"pidfile":null,  //path to file for logging pid')
+	"display_only": false,
+	"no_output": false,
+	"source":{
+		"exchange": "exchange/build",
+		"topic": ["#.finished", "#.log_uploaded"],
+		"durable": true,
+		"queue": "pulse_logger_raw_dev",
+		"$ref": "file://~/private.json#pulse_user",
+		"debug": false
+	},
+	"destination":null,
+	"debug":{
+		"log":[
+			{"log_type":"console"},
+			{
+				"log_type":"email",
+				"from_address": "klahnakoski@mozilla.com",
+				"to_address": "klahnakoski@mozilla.com",
+				"subject": "[ALERT][DEV]Problem in Raw Pulse Translator",
+				"$ref":"file://~/private.json#email"
+
+			}
+		]
+	}
+}

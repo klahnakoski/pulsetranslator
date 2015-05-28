@@ -6,9 +6,10 @@ import datetime
 import time
 
 from mozillapulse.messages.base import GenericMessage
+from pyLibrary.parsers import Log
 
 
-def publish_message(publisherClass, logger, data, routing_key, pulse_cfg):
+def publish_message(publisherClass, data, routing_key, pulse_cfg):
     assert(isinstance(data, dict))
 
     msg = GenericMessage()
@@ -24,22 +25,21 @@ def publish_message(publisherClass, logger, data, routing_key, pulse_cfg):
                 publisher.config = pulse_cfg
             publisher.publish(msg)
             break
-        except Exception:
+        except Exception, e:
             now = datetime.datetime.now()
-            logger.exception('Failure when publishing %s' % routing_key)
+            Log.exception('Failure when publishing {{key|quote}}', key=routing_key, cause=e)
 
             failures = [x for x in failures
                         if now - x < datetime.timedelta(seconds=60)]
             failures.append(now)
 
             if len(failures) >= 5:
-                logger.warning('%d publish failures within one minute.'
-                               % len(failures))
+                Log.warning('{{num}} publish failures within one minute.', num=len(failures), cause=e)
                 failures = []
                 sleep_time = 5 * 60
             else:
                 sleep_time = 5
 
-            logger.warning('Sleeping for %d seconds.' % sleep_time)
+            Log.warning('Sleeping for {{num}} seconds.', num=sleep_time)
             time.sleep(sleep_time)
-            logger.warning('Retrying...')
+            Log.warning('Retrying...')

@@ -4,59 +4,45 @@
 
 import calendar
 import httplib
-import json
 import time
-
 from urlparse import urlparse
 
 from mozillapulse.publishers import NormalizedBuildPublisher
+import requests
 
-from translatorexceptions import LogTimeoutError
+from pyLibrary.debugs.logs import Log
+from pyLibrary.dot import wrap
 from translatorqueues import publish_message
+
 
 DEBUG = False
 
 
 class LogHandler(object):
 
-    def __init__(self, error_logger, publisher_cfg):
-        self.error_logger = error_logger
+    def __init__(self, publisher_cfg):
         self.publisher_cfg = publisher_cfg
 
-    def get_url_info(self, url):
+    def _get_url_info(self, url):
         """Return a (code, content_length) tuple from making an
            HTTP HEAD request for the given url.
         """
 
         try:
-            content_length = -1
-            p = urlparse(url)
-
-            if p.scheme == 'https':
-                conn = httplib.HTTPSConnection(p.netloc)
-            else:
-                conn = httplib.HTTPConnection(p.netloc)
-            conn.request('HEAD', p.path)
-            res = conn.getresponse()
+            res = requests.head(url)
             code = res.status
 
             if code == 200:
-                for header in res.getheaders():
-                    if header[0] == 'content-length':
-                        content_length = int(header[1])
+                content_length = wrap(res.headers)["content-length"]
+            else:
+                content_length = -1
 
-            return (code, content_length)
+            return code, content_length
+        except Exception, e:
+            Log.error("Problem verifying {{url}}", e)
 
-        except AttributeError:
-            # this can happen when we didn't get a valid url from pulse
-            return (-1, -1)
 
-        except Exception:
-            # XXX: something bad happened; we should log this
-            # return (-1, -1)
-            raise
-
-    def process_data(self, data, publish_method):
+    def _process_data(self, data, publish_method):
         """
         Publish the message when the data is ready.
 
@@ -66,7 +52,7 @@ class LogHandler(object):
         """
 
         if not data.get('logurl'):
-            # should log this
+            Log.note("no logurl for {{key|quote}} ", key=data.key)
             return
 
         retrying = False
@@ -74,7 +60,7 @@ class LogHandler(object):
         while True:
             now = calendar.timegm(time.gmtime())
 
-            code, content_length = self.get_url_info(str(data['logurl']))
+            code, content_length = self._get_url_info(str(data['logurl']))
             if DEBUG:
                 if retrying:
                     print '...reprocessing logfile', code, data.get('logurl')
@@ -87,15 +73,14 @@ class LogHandler(object):
                 break
             else:
                 if now - data.get('insertion_time', 0) > 600:
-                    raise LogTimeoutError(data.get('key', 'unknown'),
-                                          data.get('logurl'))
+                    Log.error("TIMEOUT, can not read url {{key|quote}}\n{{url|indent}}", key=data.key, url=data.logurl)
                 else:
                     retrying = True
                     if DEBUG:
-                        print 'sleeping 15 seconds before retrying'
+                        Log.note('sleeping 15 seconds before retrying')
                     time.sleep(15)
 
-    def publish_unittest_message(self, data):
+    def _publish_unittest_message(self, data):
         # The original routing key has the format build.foo.bar.finished;
         # we only use 'foo' in the new routing key.
         original_key = data['key'].split('.')[1]
@@ -114,10 +99,14 @@ class LogHandler(object):
                      product,
                      original_key]
 
-        publish_message(NormalizedBuildPublisher, self.error_logger, data,
-                        '.'.join(key_parts), self.publisher_cfg)
+        publish_message(
+            NormalizedBuildPublisher,
+            data,
+            '.'.join(key_parts),
+            self.publisher_cfg
+        )
 
-    def publish_build_message(self, data):
+    def _publish_build_message(self, data):
         # The original routing key has the format build.foo.bar.finished;
         # we only use 'foo' in the new routing key.
         original_key = data['key'].split('.')[1]
@@ -130,21 +119,24 @@ class LogHandler(object):
                 key_parts.append(tag)
         key_parts.append(original_key)
 
-        publish_message(NormalizedBuildPublisher, self.error_logger, data,
-                        '.'.join(key_parts), self.publisher_cfg)
+        publish_message(
+            NormalizedBuildPublisher,
+            data,
+            '.'.join(key_parts),
+            self.publisher_cfg
+        )
 
     def handle_message(self, data):
         try:
             # publish the right kind of message based on the data.
             # if it's not a unittest, presume it's a build.
             if data.get("test"):
-                publish_method = self.publish_unittest_message
+                publish_method = self._publish_unittest_message
             else:
-                publish_method = self.publish_build_message
-            self.process_data(data, publish_method=publish_method)
-        except Exception:
+                publish_method = self._publish_build_message
+            self._process_data(data, publish_method=publish_method)
+        except Exception, e:
             obj_to_log = data
-            if (data.get('payload') and data['payload'].get('build') and
-                data['payload']['build'].get('properties')):
-                obj_to_log = data['payload']['build']['properties']
-            self.error_logger.exception(json.dumps(obj_to_log, indent=2))
+            if data.payload.build.properties:
+                obj_to_log = data.payload.build.properties
+            Log.error("Problem with {{data}}", data=obj_to_log, cause=e)

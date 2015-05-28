@@ -3,7 +3,7 @@
 	"pidfile":null,  //path to file for logging pid')
 	"display_only": false,
 	"no_output": false,
-	"source":{
+	"source":{ //see pyLibrary.env.pulse.Consumer.__init__()
 		"exchange": "exchange/build",
 		"topic": ["#.finished", "#.log_uploaded"],
 		"durable": true,
@@ -11,13 +11,10 @@
 		"$ref": "file://~/private.json#pulse_user",
 		"debug": false
 	},
-	"destination":{
+	"destination":{ //see pyLibrary.env.pulse.Publisher.__init__()
 		"exchange": "exchange/ekyle-aws-1/normalized",
 		"durable": true,
 		"queue": "pulse_logger_raw_dev",
-		"host":"pulse.mozilla.org",
-		"port":  5671,
-		"serializer":"json",
         "broker_timezone":"GMT",
 		"$ref": "file://~/private.json#pulse_user"
 	},

@@ -12,7 +12,6 @@ import json
 import os
 import re
 import time
-import sys
 
 import messageparams
 from loghandler import LogHandler

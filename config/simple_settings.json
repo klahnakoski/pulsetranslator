@@ -19,7 +19,7 @@
 				"log_type":"email",
 				"from_address": "klahnakoski@mozilla.com",
 				"to_address": "klahnakoski@mozilla.com",
-				"subject": "[ALERT][DEV]Problem in Raw Pulse Translator",
+				"subject": "[ALERT][Dev]Problem in Raw Pulse Translator",
 				"$ref":"file://~/private.json#email"
 
 			}

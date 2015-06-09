@@ -38,7 +38,6 @@ class PulseBuildbotTranslator(object):
         settings=None
     ):
         self.settings = settings
-        # from pulsetranslator.loghandler import LogHandler
         self.loghandler = LogHandler(self.settings.destination)
 
     def start(self):
@@ -90,6 +89,10 @@ class PulseBuildbotTranslator(object):
 
     def on_pulse_message(self, data):
         data = wrap(data)
+        if data._meta.routing_key == "heartbeat":
+            Log.note("heartbeat")
+            return
+
         stage_platform = None
         key = data._meta.routing_key
 

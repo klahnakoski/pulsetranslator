@@ -230,12 +230,17 @@ class Index(object):
         try:
             for r in records:
                 id = r.get("id")
+
                 if id == None:
                     id = Random.hex(40)
 
                 if "json" in r:
+                    # if id != coalesce(wrap(convert.json2value(r["json"])).value._id, id):
+                    #     Log.error("expecting _id to match")
                     json = r["json"]
                 elif "value" in r:
+                    # if id != coalesce(wrap(r).value._id, id):
+                    #     Log.error("expecting _id to match")
                     json = convert.value2json(r["value"])
                 else:
                     json = None
@@ -252,7 +257,7 @@ class Index(object):
                 data_bytes = "\n".join(lines) + "\n"
                 data_bytes = data_bytes.encode("utf8")
             except Exception, e:
-                Log.error("can not make request body from\n{{lines|indent}}",  lines= lines, cause=e)
+                Log.error("can not make request body from\n{{lines|indent}}", lines=lines, cause=e)
 
 
             response = self.cluster._post(
@@ -266,22 +271,28 @@ class Index(object):
             for i, item in enumerate(items):
                 if self.cluster.version.startswith("0.90."):
                     if not item.index.ok:
-                        Log.error("{{error}} while loading line:\n{{line}}",
-                            error= item.index.error,
-                            line= lines[i * 2 + 1])
-                elif self.cluster.version.startswith("1.4."):
+                        Log.error(
+                            "{{error}} while loading line:\n{{line}}",
+                            error=item.index.error,
+                            line=lines[i * 2 + 1]
+                        )
+                elif any(map(self.cluster.version.startswith, ["1.4.", "1.5."])):
                     if item.index.status not in [200, 201]:
-                        Log.error("{{error}} while loading line:\n{{line}}",
-                            error= item.index.error,
-                            line= lines[i * 2 + 1])
+                        Log.error(
+                            "{{num}} {{error}} while loading line into {{index}}:\n{{line}}",
+                            num=item.index.status,
+                            error=item.index.error,
+                            line=lines[i * 2 + 1],
+                            index=self.settings.index
+                        )
                 else:
                     Log.error("version not supported {{version}}",  version=self.cluster.version)
 
             if self.debug:
-                Log.note("{{num}} documents added",  num= len(items))
+                Log.note("{{num}} documents added", num=len(items))
         except Exception, e:
             if e.message.startswith("sequence item "):
-                Log.error("problem with {{data}}",  data= repr(lines[int(e.message[14:16].strip())]), cause=e)
+                Log.error("problem with {{data}}", data=repr(lines[int(e.message[14:16].strip())]), cause=e)
             Log.error("problem sending to ES", e)
 
 
@@ -305,21 +316,21 @@ class Index(object):
                 data='{"index":{"refresh_interval":' + convert.value2json(interval) + '}}'
             )
 
-            result = convert.json2value(utf82unicode(response.content))
+            result = convert.json2value(utf82unicode(response.all_content))
             if not result.ok:
                 Log.error("Can not set refresh interval ({{error}})", {
-                    "error": utf82unicode(response.content)
+                    "error": utf82unicode(response.all_content)
                 })
-        elif self.cluster.version.startswith("1.4."):
+        elif any(map(self.cluster.version.startswith, ["1.4.", "1.5."])):
             response = self.cluster.put(
                 "/" + self.settings.index + "/_settings",
                 data=convert.unicode2utf8('{"index":{"refresh_interval":' + convert.value2json(interval) + '}}')
             )
 
-            result = convert.json2value(utf82unicode(response.content))
+            result = convert.json2value(utf82unicode(response.all_content))
             if not result.acknowledged:
                 Log.error("Can not set refresh interval ({{error}})", {
-                    "error": utf82unicode(response.content)
+                    "error": utf82unicode(response.all_content)
                 })
         else:
             Log.error("Do not know how to handle ES version {{version}}",  version=self.cluster.version)
@@ -333,21 +344,22 @@ class Index(object):
                     show_query.facets = {k: "..." for k in query.facets.keys()}
                 else:
                     show_query = query
-                Log.note("Query:\n{{query|indent}}",  query= show_query)
+                Log.note("Query:\n{{query|indent}}", query=show_query)
             return self.cluster._post(
                 self.path + "/_search",
                 data=convert.value2json(query).encode("utf8"),
                 timeout=coalesce(timeout, self.settings.timeout)
             )
         except Exception, e:
-            Log.error("Problem with search (path={{path}}):\n{{query|indent}}",
+            Log.error(
+                "Problem with search (path={{path}}):\n{{query|indent}}",
                 path=self.path + "/_search",
                 query=query,
                 cause=e
             )
 
     def threaded_queue(self, batch_size=None, max_size=None, period=None, silent=False):
-        return ThreadedQueue("elasticsearch: " + self.settings.index, self, batch_size=batch_size, max_size=max_size, period=period, silent=silent)
+        return ThreadedQueue("push to elasticsearch: " + self.settings.index, self, batch_size=batch_size, max_size=max_size, period=period, silent=silent)
 
     def delete(self):
         self.cluster.delete_index(index=self.settings.index)
@@ -430,8 +442,6 @@ class Cluster(object):
             settings.index = alias
             return Index(settings)
         Log.error("Can not find any index with alias {{alias_name}}",  alias_name= alias)
-
-
 
     @use_settings
     def create_index(
@@ -531,10 +541,10 @@ class Cluster(object):
 
             response = http.post(url, **kwargs)
             if response.status_code not in [200, 201]:
-                Log.error(response.reason+": "+response.content)
+                Log.error(response.reason + ": " + response.all_content)
             if self.debug:
-                Log.note("response: {{response}}",  response= utf82unicode(response.content)[:130])
-            details = convert.json2value(utf82unicode(response.content))
+                Log.note("response: {{response}}", response=utf82unicode(response.all_content)[:130])
+            details = convert.json2value(utf82unicode(response.all_content))
             if details.error:
                 Log.error(convert.quote2string(details.error))
             if details._shards.failed > 0:
@@ -562,10 +572,10 @@ class Cluster(object):
         try:
             response = http.get(url, **kwargs)
             if response.status_code not in [200]:
-                Log.error(response.reason+": "+response.content)
+                Log.error(response.reason+": "+response.all_content)
             if self.debug:
-                Log.note("response: {{response}}",  response= utf82unicode(response.content)[:130])
-            details = wrap(convert.json2value(utf82unicode(response.content)))
+                Log.note("response: {{response}}",  response= utf82unicode(response.all_content)[:130])
+            details = wrap(convert.json2value(utf82unicode(response.all_content)))
             if details.error:
                 Log.error(details.error)
             return details
@@ -577,11 +587,11 @@ class Cluster(object):
         try:
             response = http.head(url, **kwargs)
             if response.status_code not in [200]:
-                Log.error(response.reason+": "+response.content)
+                Log.error(response.reason+": "+response.all_content)
             if self.debug:
-                Log.note("response: {{response}}",  response= utf82unicode(response.content)[:130])
-            if response.content:
-                details = wrap(convert.json2value(utf82unicode(response.content)))
+                Log.note("response: {{response}}",  response= utf82unicode(response.all_content)[:130])
+            if response.all_content:
+                details = wrap(convert.json2value(utf82unicode(response.all_content)))
                 if details.error:
                     Log.error(details.error)
                 return details
@@ -599,9 +609,9 @@ class Cluster(object):
         try:
             response = http.put(url, **kwargs)
             if response.status_code not in [200]:
-                Log.error(response.reason+": "+response.content)
+                Log.error(response.reason+": "+response.all_content)
             if self.debug:
-                Log.note("response: {{response}}",  response= utf82unicode(response.content)[0:300:])
+                Log.note("response: {{response}}",  response= utf82unicode(response.all_content)[0:300:])
             return response
         except Exception, e:
             Log.error("Problem with call to {{url}}",  url= url, cause=e)
@@ -731,29 +741,33 @@ class Alias(object):
             if not self.settings.alias or self.settings.alias==self.settings.index:
                 #PARTIALLY DEFINED settings
                 candidates = [(name, i) for name, i in indices.items() if self.settings.index in i.aliases]
-                index = qb.sort(candidates, 0).last()[1]
+                # TODO: MERGE THE mappings OF ALL candidates, DO NOT JUST PICK THE LAST ONE
+                index = "dummy value"
+                schema = wrap({"properties": {}})
+                for _, ind in qb.sort(candidates, {"value": 0, "sort": -1}):
+                    schema.properties = _merge_mapping(schema.properties, ind.mappings[self.settings.type].properties)
             else:
                 #FULLY DEFINED settings
                 index = indices[self.settings.index]
+                schema = index.mappings[self.settings.type]
 
             if index == None and retry:
                 #TRY AGAIN, JUST IN CASE
                 self.cluster.cluster_state = None
                 return self.get_schema(retry=False)
 
-            properties = index.mappings[self.settings.type]
-
-
             #TODO: REMOVE THIS BUG CORRECTION
-            if not properties and self.settings.type == "test_result":
-                properties = index.mappings["test_results"]
+            if not schema and self.settings.type == "test_result":
+                schema = index.mappings["test_results"]
             # DONE BUG CORRECTION
 
-            if not properties:
-                Log.error("ElasticSearch index ({{index}}) does not have type ({{type}})",
-                    index= self.settings.index,
-                    type= self.settings.type)
-            return properties
+            if not schema:
+                Log.error(
+                    "ElasticSearch index ({{index}}) does not have type ({{type}})",
+                    index=self.settings.index,
+                    type=self.settings.type
+                )
+            return schema
         else:
             mapping = self.cluster.get(self.path + "/_mapping")
             if not mapping[self.settings.type]:
@@ -797,10 +811,12 @@ class Alias(object):
             if not keep_trying:
                 for name, status in result._indices.items():
                     if status._shards.failed > 0:
-                        Log.error("ES shard(s) report Failure to delete from {{index}}: {{message}}.  Query was {{query}}",
-                            index= name,
-                            query= query,
-                            message= status._shards.failures[0].reason)
+                        Log.error(
+                            "ES shard(s) report Failure to delete from {{index}}: {{message}}.  Query was {{query}}",
+                            index=name,
+                            query=query,
+                            message=status._shards.failures[0].reason
+                        )
 
 
     def search(self, query, timeout=None):
@@ -819,9 +835,117 @@ class Alias(object):
                 timeout=coalesce(timeout, self.settings.timeout)
             )
         except Exception, e:
-            Log.error("Problem with search (path={{path}}):\n{{query|indent}}",
-                path= self.path + "/_search",
-                query= query,
+            Log.error(
+                "Problem with search (path={{path}}):\n{{query|indent}}",
+                path=self.path + "/_search",
+                query=query,
                 cause=e
             )
+
+
+def _merge_mapping(a, b):
+    """
+    MERGE TWO MAPPINGS, a TAKES PRECEDENCE
+    """
+    for name, b_details in b.items():
+        a_details = a[name]
+        if a_details.properties and not a_details.type:
+            a_details.type = "object"
+        if b_details.properties and not b_details.type:
+            b_details.type = "object"
+
+        if a_details:
+            a_details.type = _merge_type[a_details.type][b_details.type]
+
+            if b_details.type in ["object", "nested"]:
+                _merge_mapping(a_details.properties, b_details.properties)
+        else:
+            a[name] = deepcopy(b_details)
+
+    return a
+
+_merge_type = {
+    "boolean": {
+        "boolean": "boolean",
+        "integer": "integer",
+        "long": "long",
+        "float": "float",
+        "double": "double",
+        "string": "string",
+        "object": None,
+        "nested": None
+    },
+    "integer": {
+        "boolean": "integer",
+        "integer": "integer",
+        "long": "long",
+        "float": "float",
+        "double": "double",
+        "string": "string",
+        "object": None,
+        "nested": None
+    },
+    "long": {
+        "boolean": "long",
+        "integer": "long",
+        "long": "long",
+        "float": "double",
+        "double": "double",
+        "string": "string",
+        "object": None,
+        "nested": None
+    },
+    "float": {
+        "boolean": "float",
+        "integer": "float",
+        "long": "double",
+        "float": "float",
+        "double": "double",
+        "string": "string",
+        "object": None,
+        "nested": None
+    },
+    "double": {
+        "boolean": "double",
+        "integer": "double",
+        "long": "double",
+        "float": "double",
+        "double": "double",
+        "string": "string",
+        "object": None,
+        "nested": None
+    },
+    "string": {
+        "boolean": "string",
+        "integer": "string",
+        "long": "string",
+        "float": "string",
+        "double": "string",
+        "string": "string",
+        "object": None,
+        "nested": None
+    },
+    "object": {
+        "boolean": None,
+        "integer": None,
+        "long": None,
+        "float": None,
+        "double": None,
+        "string": None,
+        "object": "object",
+        "nested": "nested"
+    },
+    "nested": {
+        "boolean": None,
+        "integer": None,
+        "long": None,
+        "float": None,
+        "double": None,
+        "string": None,
+        "object": "nested",
+        "nested": "nested"
+    }
+}
+
+
 

@@ -9,7 +9,8 @@
 		"durable": true,
 		"queue": "pulse_logger_raw_dev",
 		"$ref": "file://~/private.json#pulse_user",
-		"debug": false
+		"true": false,
+		"timeout": 70   // SLIGHTLY LONGER THAN EXPECTED HEARTBEAT
 	},
 	"destination":null,
 	"debug":{

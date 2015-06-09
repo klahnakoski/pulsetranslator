@@ -77,7 +77,7 @@ class PulseBuildbotTranslator(object):
         # Repacks do not have a buildurl included. We can remove this
         # workaround once bug 857971 has been fixed
         if not data.buildurl and not data.repack:
-            Log.error("No build URL in {{key|quote}}", data)
+            Log.warning("No build URL in {{key|quote}}", data)
 
         if not self.settings.destination:
             return

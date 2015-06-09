@@ -18,7 +18,7 @@ from mozillapulse.utils import time_to_string
 from pytz import timezone
 from pyLibrary import jsons
 
-from pyLibrary.debugs.logs import Log
+from pyLibrary.debugs.logs import Log, Except
 from pyLibrary.dot import unwrap, wrap, coalesce, Dict, set_default
 from pyLibrary.meta import use_settings
 from pyLibrary.thread.threads import Thread
@@ -56,11 +56,11 @@ class Consumer(Thread):
         settings.callback = self._got_result
         settings.user = coalesce(settings.user, settings.username)
         settings.applabel = coalesce(settings.applable, settings.queue, settings.queue_name)
+        settings.topic = topic
 
         self.pulse = GenericConsumer(settings, connect=True, **settings)
         self.count = coalesce(start, 0)
         self.start()
-
 
     def _got_result(self, data, message):
         data = wrap(data)
@@ -74,6 +74,7 @@ class Consumer(Thread):
                 self.target_queue.add(data)
                 message.ack()
             except Exception, e:
+                e = Except.wrap(e)
                 if not self.target_queue.closed:  # EXPECTED TO HAPPEN, THIS THREAD MAY HAVE BEEN AWAY FOR A WHILE
                     raise e
         else:
@@ -84,18 +85,32 @@ class Consumer(Thread):
                 Log.warning("Problem processing pulse (see `data` in structured log)", data=data, cause=e)
 
     def _worker(self, please_stop):
+        def disconnect():
+            try:
+                self.target_queue.close()
+                Log.note("stop put into queue")
+            except:
+                pass
+
+            self.pulse.disconnect()
+            Log.note("pulse listener was given a disconnect()")
+
+        please_stop.on_go(disconnect)
+
         while not please_stop:
             try:
                 self.pulse.listen()
             except Exception, e:
                 if not please_stop:
                     Log.warning("pulse had problem", e)
+        Log.note("pulse listener is done")
+
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         Log.note("clean pulse exit")
         self.please_stop.go()
         try:
-            self.target_queue.add(Thread.STOP)
+            self.target_queue.close()
             Log.note("stop put into queue")
         except:
             pass

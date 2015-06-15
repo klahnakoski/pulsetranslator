@@ -53,6 +53,8 @@ class PulseBuildbotTranslator(object):
 
     def process_unittest(self, data):
         data.insertion_time = calendar.timegm(time.gmtime())
+        if data['platform'] in messageparams.ignored_platforms:
+            return
         if not data.get('logurl'):
             Log.error("No log URL in {{key|quote}}", data)
         if data.platform not in messageparams.platforms:
@@ -69,9 +71,11 @@ class PulseBuildbotTranslator(object):
         self.loghandler.handle_message(data)
 
     def process_build(self, data):
+        if data.platform in messageparams.ignored_platforms:
+            return
         if data.platform not in messageparams.platforms:
             Log.error("Bad platform {{platform|quote}} in {{key|quote}}", data)
-        for tag in data.tags:
+        for tag in data['tags']:
             if tag not in messageparams.tags:
                 Log.error("Bad tag {{tag|quote}} in {{key|quote}}", data, tag=tag)
         # Repacks do not have a buildurl included. We can remove this

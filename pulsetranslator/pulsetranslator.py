@@ -178,9 +178,16 @@ class PulseBuildbotTranslator(object):
             elif k in ['en_revision', 'script_repo_revision']:
                 builddata.release = v
 
-            # look for tests url
+                # look for tests url
+                elif prop[0] == 'symbolsUrl':
+                    builddata['symbols_url'] = prop[1]
+
             elif k == 'testsUrl':
                 builddata.testsurl = v
+
+                # look for url to json manifest of test packages
+                elif prop[0] == 'testPackagesUrl':
+                    builddata['test_packages_url'] = prop[1]
 
             # look for buildername
             elif k == 'buildername':
@@ -356,6 +363,19 @@ class PulseBuildbotTranslator(object):
                         data = copy.deepcopy(builddata)
                         data.locale = locale
                         self.process_build(data)
+
+                    elif builddata['locales']:  # nightly repack build
+                        builddata['repack'] = True
+
+                        locales = json.loads(builddata['locales'])
+                        for locale in locales:
+                            # Use all properties except the locales array
+                            data = copy.deepcopy(builddata)
+                            del data['locales']
+
+                            # Process locale
+                            data['locale'] = locale
+                            self.process_build(data)
 
                 else:
                     self.process_build(builddata)

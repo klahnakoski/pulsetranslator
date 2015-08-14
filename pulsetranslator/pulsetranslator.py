@@ -178,16 +178,16 @@ class PulseBuildbotTranslator(object):
             elif k in ['en_revision', 'script_repo_revision']:
                 builddata.release = v
 
-                # look for tests url
-                elif prop[0] == 'symbolsUrl':
-                    builddata['symbols_url'] = prop[1]
+            # look for tests url
+            elif k == 'symbolsUrl':
+                builddata['symbols_url'] = v
 
             elif k == 'testsUrl':
                 builddata.testsurl = v
 
-                # look for url to json manifest of test packages
-                elif prop[0] == 'testPackagesUrl':
-                    builddata['test_packages_url'] = prop[1]
+            # look for url to json manifest of test packages
+            elif k == 'testPackagesUrl':
+                builddata['test_packages_url'] = v
 
             # look for buildername
             elif k == 'buildername':
@@ -308,6 +308,7 @@ class PulseBuildbotTranslator(object):
             otherRe = re.compile(r'build\.((release-|jetpack-|b2g_)?(%s)[-|_](xulrunner[-|_])?(%s)([-|_]?)(.*?))\.(\d+)\.(log_uploaded|finished)' %
                                  (builddata.tree, builddata.platform))
             match = otherRe.match(key)
+
             if match:
                 if 'finished' in match.group(9):
                     # Ignore this message, we only care about 'log_uploaded'
@@ -364,18 +365,18 @@ class PulseBuildbotTranslator(object):
                         data.locale = locale
                         self.process_build(data)
 
-                    elif builddata['locales']:  # nightly repack build
-                        builddata['repack'] = True
+                elif builddata['locales']:  # nightly repack build
+                    builddata['repack'] = True
 
-                        locales = json.loads(builddata['locales'])
-                        for locale in locales:
-                            # Use all properties except the locales array
-                            data = copy.deepcopy(builddata)
-                            del data['locales']
+                    locales = json.loads(builddata['locales'])
+                    for locale in locales:
+                        # Use all properties except the locales array
+                        data = copy.deepcopy(builddata)
+                        del data['locales']
 
-                            # Process locale
-                            data['locale'] = locale
-                            self.process_build(data)
+                        # Process locale
+                        data['locale'] = locale
+                        self.process_build(data)
 
                 else:
                     self.process_build(builddata)
